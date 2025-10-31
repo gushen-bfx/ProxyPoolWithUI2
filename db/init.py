@@ -1,26 +1,24 @@
 # encoding: utf-8
 
-from data.config import DATABASE_PATH
 from .Proxy import Proxy
 from .Fetcher import Fetcher
 from fetchers import fetchers
-import sqlite3
+from .conn import conn, TRANSACTION_BEGIN
 
 def init():
     """
     初始化数据库
     """
 
-    conn = sqlite3.connect(DATABASE_PATH)
-
     create_tables = Proxy.ddls + Fetcher.ddls
     for sql in create_tables:
-        conn.execute(sql)
-        conn.commit()
-    
+        cur = conn.execute(sql)
+        cur.close()
+    conn.commit()
+
     # 注册所有的爬取器
     c = conn.cursor()
-    c.execute('BEGIN EXCLUSIVE TRANSACTION;')
+    c.execute(TRANSACTION_BEGIN)
     for item in fetchers:
         c.execute('SELECT * FROM fetchers WHERE name=?', (item.name,))
         if c.fetchone() is None:
@@ -29,5 +27,3 @@ def init():
             c.execute('INSERT INTO fetchers VALUES(?,?,?,?,?)', f.params())
     c.close()
     conn.commit()
-    
-    conn.close()

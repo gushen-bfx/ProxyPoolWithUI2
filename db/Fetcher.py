@@ -14,7 +14,7 @@ class Fetcher(object):
         enable BOOLEAN NOT NULL,
         sum_proxies_cnt INTEGER NOT NULL,
         last_proxies_cnt INTEGER NOT NULL,
-        last_fetch_date TIMESTAMP,
+        last_fetch_date TIMESTAMP NULL,
         PRIMARY KEY (name)
     )
     """]
@@ -50,8 +50,8 @@ class Fetcher(object):
     @staticmethod
     def decode(row):
         """
-        将sqlite返回的一行解析为Fetcher
-        row : sqlite返回的一行
+        将数据库返回的一行解析为Fetcher
+        row : 数据库返回的一行
         """
         assert len(row) == 5
         f = Fetcher()

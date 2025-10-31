@@ -42,6 +42,31 @@ python main.py
 
 > **🔐 安全提示**: 首次运行前必须配置 JWT 密钥！运行 `python setup_security.py` 进行安全配置。
 
+### 数据库配置
+
+默认情况下，系统会在 `data/data.db` 中使用 SQLite 存储所有数据。
+如果你希望接入 MySQL 或 PostgreSQL，只需在 `.env` 文件或系统环境变量中声明连接信息：
+
+```bash
+# MySQL 示例
+DB_TYPE=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=proxypool
+DB_PASSWORD=your_password
+DB_NAME=proxypool
+
+# PostgreSQL 示例
+DB_TYPE=postgresql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_USER=proxypool
+DB_PASSWORD=your_password
+DB_NAME=proxypool
+```
+
+修改完成后重新启动服务即可，系统会自动完成表结构初始化。
+
 ### 方式二：Docker 运行
 
 #### 快速开始
@@ -106,6 +131,69 @@ docker run -d \
   ghcr.io/huppugo1/proxypoolwithui:latest
 ```
 > ✅ **优势**: Docker自动管理，适合生产环境
+
+#### 在 Docker 中配置数据库
+
+容器同样支持通过环境变量切换到 MySQL 或 PostgreSQL，只需在启动时传入连接信息即可。
+
+**方式一：直接在命令行传入变量**
+
+```bash
+docker run -d \
+  --name proxy-pool \
+  -p 5000:5000 \
+  -v $(pwd)/data:/proxy/data \
+  -e DB_TYPE=mysql \
+  -e DB_HOST=your-mysql-host \
+  -e DB_PORT=3306 \
+  -e DB_USER=proxypool \
+  -e DB_PASSWORD=your_password \
+  -e DB_NAME=proxypool \
+  ghcr.io/huppugo1/proxypoolwithui:latest
+```
+
+**方式二：使用 `.env` 文件（推荐）**
+
+```bash
+# 1. 创建 .env 文件
+cat <<'EOF' > .env
+DB_TYPE=postgresql
+DB_HOST=your-postgres-host
+DB_PORT=5432
+DB_USER=proxypool
+DB_PASSWORD=your_password
+DB_NAME=proxypool
+EOF
+
+# 2. 启动容器并加载 .env
+docker run -d \
+  --name proxy-pool \
+  -p 5000:5000 \
+  -v $(pwd)/data:/proxy/data \
+  --env-file .env \
+  ghcr.io/huppugo1/proxypoolwithui:latest
+```
+
+> ℹ️ **提示**: 当使用外部数据库时，请确保数据库实例允许容器网络访问，并提前创建好对应的数据库和账号。
+
+**方式三：使用 Docker Compose 管理部署**
+
+```yaml
+version: "3.8"
+services:
+  proxypool:
+    image: ghcr.io/huppugo1/proxypoolwithui:latest
+    container_name: proxy-pool
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/proxy/data
+    env_file:
+      - .env
+```
+
+保存上述内容为 `docker-compose.yml`，与 `.env` 放在同一目录下，运行 `docker compose up -d` 即可启动服务。
 
 #### 完整部署示例
 
@@ -233,7 +321,7 @@ scp -r ./data/ user@new-server:/path/to/new/location/
 
 ### Token 说明
 
-- Token 有效期：24 小时（可在 `config.py` 中配置）
+- Token 有效期：24 小时（可在 `config/__init__.py` 中配置）
 - Token 过期后需要重新登录
 - 前端会自动处理 Token 过期跳转
 
@@ -539,8 +627,8 @@ ProxyPoolWithUI/
 ├── proc/             # 爬取和验证进程
 ├── frontend/         # Web 前端（Nuxt 3 + Vue 3）
 ├── utils/            # 工具类（IP 定位、单实例管理）
-├── data/             # 数据目录（数据库、配置文件等）
-│   ├── config.py     # 配置文件
+├── config/           # 应用配置（环境变量、数据目录等）
+├── data/             # 数据目录（数据库、运行时文件等）
 │   ├── data.db       # SQLite 数据库
 │   ├── users.json    # 用户数据
 │   ├── api_status.json # API接口状态配置
@@ -550,17 +638,19 @@ ProxyPoolWithUI/
 
 ## ⚙️ 配置说明
 
-大部分配置在 `data/config.py` 中，默认配置已经可以适应大部分情况。
+大部分配置在 `config/__init__.py` 中，默认配置已经可以适应大部分情况。
 
 ### 数据目录结构
 
-所有数据文件和配置文件统一存放在 `data/` 目录下：
+所有运行时数据文件统一存放在 `data/` 目录下，配置代码位于 `config/` 目录：
 
-- **`data/config.py`** - 主配置文件，包含所有系统配置
+- **`config/__init__.py`** - 主配置模块，处理所有系统配置
 - **`data/data.db`** - SQLite 数据库文件，存储代理数据
 - **`data/users.json`** - 用户账户数据（用户名、密码哈希等）
 - **`data/api_status.json`** - API接口启用/禁用状态配置
 - **`data/sub.json`** - 生成的订阅链接存储
+
+> ℹ️ 可以通过环境变量 `DATA_DIR` 自定义数据目录位置（例如在 Docker 中挂载到其他路径）。
 
 ### 数据备份
 
@@ -583,7 +673,7 @@ tar -xzf proxypool_backup_20241019.tar.gz
 
 ### 认证配置
 
-在 `config.py` 中可以配置认证相关参数：
+在 `config/__init__.py` 中可以配置认证相关参数：
 
 ```python
 # JWT密钥 - 建议在生产环境使用环境变量

@@ -13,8 +13,8 @@ import requests
 from func_timeout import func_set_timeout
 from func_timeout.exceptions import FunctionTimedOut
 from db import conn
-from data.config import PROC_VALIDATOR_SLEEP, VALIDATE_THREAD_NUM
-from data.config import VALIDATE_METHOD, VALIDATE_KEYWORD, VALIDATE_HEADER, VALIDATE_URL, VALIDATE_TIMEOUT, VALIDATE_MAX_FAILS
+from config import PROC_VALIDATOR_SLEEP, VALIDATE_THREAD_NUM
+from config import VALIDATE_METHOD, VALIDATE_KEYWORD, VALIDATE_HEADER, VALIDATE_URL, VALIDATE_TIMEOUT, VALIDATE_MAX_FAILS
 
 logging.basicConfig(stream=sys.stdout, format="%(asctime)s-%(levelname)s:%(name)s:%(message)s", level='INFO')
 

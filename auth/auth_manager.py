@@ -7,7 +7,7 @@ import os
 import json
 from functools import wraps
 from flask import request, jsonify
-from data.config import USERS_FILE
+from config import USERS_FILE
 
 class AuthManager:
     """
@@ -214,7 +214,7 @@ def token_required(f):
             token = token[7:]
         
         # 验证token
-        from data.config import auth_manager
+        from config import auth_manager
         payload = auth_manager.verify_token(token)
         
         if not payload:

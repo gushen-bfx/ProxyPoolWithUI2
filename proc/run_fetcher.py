@@ -10,7 +10,7 @@ import logging
 import time
 from db import conn
 from fetchers import fetchers
-from data.config import PROC_FETCHER_SLEEP
+from config import PROC_FETCHER_SLEEP
 from func_timeout import func_set_timeout
 from func_timeout.exceptions import FunctionTimedOut
 

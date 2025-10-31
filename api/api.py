@@ -3,7 +3,6 @@
 import os
 import logging
 import yaml
-import sqlite3
 import datetime
 import json
 import jwt
@@ -12,20 +11,20 @@ import time
 import urllib.parse
 import base64
 from flask import Flask
-from flask import jsonify, request, redirect, send_from_directory, Response
+from flask import jsonify, request, redirect, send_from_directory, Response, abort
 
 log = logging.getLogger('werkzeug')
 log.disabled = True
 
 try:
     from db import conn
-    from data.config import auth_manager, API_STATUS_FILE, SUBSCRIPTIONS_FILE
+    from config import auth_manager, API_STATUS_FILE, SUBSCRIPTIONS_FILE
     from auth.auth_manager import token_required
 except:
     import sys
     sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
     from db import conn
-    from data.config import auth_manager, API_STATUS_FILE, SUBSCRIPTIONS_FILE
+    from config import auth_manager, API_STATUS_FILE, SUBSCRIPTIONS_FILE
     from auth.auth_manager import token_required
 
 STATIC_FOLDER = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', 'frontend', 'deployment', 'public')
@@ -1781,7 +1780,7 @@ def refresh_subscription_link(link_id):
 ############# API接口管理 ################
 
 # API接口状态配置文件路径
-# API状态文件路径已在config.py中定义
+# API状态文件路径已在 config/__init__.py 中定义
 
 # 默认API接口状态配置
 DEFAULT_API_ENABLED_STATUS = {
@@ -1965,6 +1964,32 @@ def page_index():
 def page_fetchers():
     return send_from_directory(STATIC_FOLDER, 'fetchers/index.html')
 
+
+@app.route('/web/<path:subpath>', methods=['GET'])
+def page_static(subpath):
+    """Serve static frontend routes for deep links under /web."""
+    # Normalize the requested path to avoid path traversal attempts
+    normalized = os.path.normpath(subpath)
+    if normalized.startswith('..'):
+        abort(404)
+
+    static_root = os.path.abspath(STATIC_FOLDER)
+    requested = os.path.abspath(os.path.join(static_root, normalized))
+    if os.path.commonpath([requested, static_root]) != static_root:
+        abort(404)
+
+    if os.path.isdir(requested):
+        index_file = os.path.join(requested, 'index.html')
+        if os.path.isfile(index_file):
+            rel_dir = os.path.relpath(requested, static_root)
+            return send_from_directory(os.path.join(static_root, rel_dir), 'index.html')
+    elif os.path.isfile(requested):
+        rel_dir = os.path.dirname(normalized)
+        file_name = os.path.basename(normalized)
+        return send_from_directory(os.path.join(static_root, rel_dir), file_name)
+
+    abort(404)
+
 # 获取代理状态
 @app.route('/proxies_status', methods=['GET'])
 @token_required
@@ -2115,7 +2140,7 @@ def add_proxy():
         print(f"[手动添加代理] 成功添加: {protocol}://{ip}:{port}")
         return jsonify(dict(success=True, message='代理添加成功，等待验证'))
     
-    except sqlite3.IntegrityError as e:
+    except conn.DBIntegrityError as e:
         error_msg = '该代理已存在（相同协议、IP和端口）'
         print(f"[手动添加代理] 错误: {error_msg}")
         return jsonify(dict(success=False, message=error_msg)), 400
