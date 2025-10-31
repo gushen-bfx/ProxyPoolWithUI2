@@ -1,7 +1,32 @@
 # 数据库封装
 
 这个目录下封装了操作数据库的一些接口。
-为了通用性，本项目使用SQLite作为底层的数据库，使用`sqlite3`提供的接口对数据库进行操作。
+系统默认使用 SQLite 保存数据，但现在也支持通过环境变量切换到 MySQL 或 PostgreSQL。
+所有数据库驱动通过统一的封装进行访问，业务代码无需调整。
+
+## 数据库配置
+
+在根目录下创建 `.env` 文件或直接设置环境变量，即可切换数据库类型：
+
+```
+# 使用 MySQL
+DB_TYPE=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=proxypool
+DB_PASSWORD=your_password
+DB_NAME=proxypool
+
+# 或者使用 PostgreSQL
+DB_TYPE=postgresql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_USER=proxypool
+DB_PASSWORD=your_password
+DB_NAME=proxypool
+```
+
+未设置 `DB_TYPE` 时将继续使用默认的 SQLite 数据库，数据文件存放在 `data/data.db`。
 
 ## 数据表
 

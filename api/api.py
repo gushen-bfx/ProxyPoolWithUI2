@@ -3,7 +3,6 @@
 import os
 import logging
 import yaml
-import sqlite3
 import datetime
 import json
 import jwt
@@ -2115,7 +2114,7 @@ def add_proxy():
         print(f"[手动添加代理] 成功添加: {protocol}://{ip}:{port}")
         return jsonify(dict(success=True, message='代理添加成功，等待验证'))
     
-    except sqlite3.IntegrityError as e:
+    except conn.DBIntegrityError as e:
         error_msg = '该代理已存在（相同协议、IP和端口）'
         print(f"[手动添加代理] 错误: {error_msg}")
         return jsonify(dict(success=False, message=error_msg)), 400

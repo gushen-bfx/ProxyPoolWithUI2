@@ -4,32 +4,178 @@
 封装的数据库接口
 """
 
-from data.config import DATABASE_PATH
+from data.config import DATABASE_PATH, DB_TYPE, DB_CONFIG
 from .Proxy import Proxy
 from .Fetcher import Fetcher
-import sqlite3
 import datetime
 import threading
 import sys
 import os
 
+if DB_TYPE == 'sqlite':
+    import sqlite3
+elif DB_TYPE == 'mysql':
+    import pymysql
+elif DB_TYPE == 'postgresql':
+    import psycopg2
+else:
+    raise ValueError(f'Unsupported database type: {DB_TYPE}')
+
 # 添加父目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.ip_location import get_ip_location_cached
 
-conn = sqlite3.connect(
-    DATABASE_PATH, 
-    detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
-    timeout=10.0,  # 减少超时时间到 10 秒，避免长时间等待
-    check_same_thread=False  # 允許多線程訪問（配合鎖使用）
-)
-# 设置 WAL 模式，提高并发性能
-conn.execute('PRAGMA journal_mode=WAL')
-conn.execute('PRAGMA synchronous=NORMAL')  # 平衡性能和安全性
-# 优化数据库性能设置
-conn.execute('PRAGMA cache_size=10000')  # 增加缓存大小
-conn.execute('PRAGMA temp_store=MEMORY')  # 临时表存储在内存中
-conn.execute('PRAGMA mmap_size=268435456')  # 启用内存映射，提高读取性能
+class CursorWrapper:
+    """统一不同数据库驱动的游标行为"""
+
+    def __init__(self, cursor, paramstyle):
+        self._cursor = cursor
+        self._paramstyle = paramstyle
+
+    def _prepare(self, query, params):
+        if params is None:
+            return query, None
+
+        if not isinstance(params, (tuple, list)):
+            params = (params,)
+        else:
+            params = tuple(params)
+
+        if self._paramstyle == 'qmark':
+            return query, params
+
+        if self._paramstyle == 'pyformat':
+            if '?' in query:
+                query = '%s'.join(query.split('?'))
+            return query, params
+
+        return query, params
+
+    def execute(self, query, params=None):
+        query, params = self._prepare(query, params)
+        if params is None:
+            self._cursor.execute(query)
+        else:
+            self._cursor.execute(query, params)
+        return self
+
+    def executemany(self, query, seq_of_params):
+        if self._paramstyle == 'pyformat' and '?' in query:
+            query = '%s'.join(query.split('?'))
+        self._cursor.executemany(query, seq_of_params)
+        return self
+
+    def fetchone(self):
+        return self._cursor.fetchone()
+
+    def fetchall(self):
+        return self._cursor.fetchall()
+
+    def close(self):
+        self._cursor.close()
+
+    def __iter__(self):
+        return iter(self._cursor)
+
+    @property
+    def rowcount(self):
+        return self._cursor.rowcount
+
+    @property
+    def lastrowid(self):
+        return getattr(self._cursor, 'lastrowid', None)
+
+    def __getattr__(self, item):
+        return getattr(self._cursor, item)
+
+
+class ConnectionWrapper:
+    """简单的连接包装器，使不同数据库的用法保持一致"""
+
+    def __init__(self, connection, paramstyle):
+        self._connection = connection
+        self._paramstyle = paramstyle
+
+    def cursor(self):
+        return CursorWrapper(self._connection.cursor(), self._paramstyle)
+
+    def execute(self, query, params=None):
+        cursor = self.cursor()
+        cursor.execute(query, params)
+        return cursor
+
+    def commit(self):
+        self._connection.commit()
+
+    def rollback(self):
+        self._connection.rollback()
+
+    def close(self):
+        self._connection.close()
+
+    def __getattr__(self, item):
+        return getattr(self._connection, item)
+
+
+def _create_connection():
+    if DB_TYPE == 'sqlite':
+        return sqlite3.connect(
+            DATABASE_PATH,
+            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
+            timeout=10.0,
+            check_same_thread=False
+        )
+    if DB_TYPE == 'mysql':
+        return pymysql.connect(
+            host=DB_CONFIG['host'],
+            port=DB_CONFIG['port'],
+            user=DB_CONFIG['user'],
+            password=DB_CONFIG['password'],
+            database=DB_CONFIG['database'],
+            charset='utf8mb4',
+            autocommit=False,
+            connect_timeout=DB_CONFIG.get('connect_timeout', 10),
+        )
+    if DB_TYPE == 'postgresql':
+        return psycopg2.connect(
+            host=DB_CONFIG['host'],
+            port=DB_CONFIG['port'],
+            user=DB_CONFIG['user'],
+            password=DB_CONFIG['password'],
+            dbname=DB_CONFIG['database'],
+            connect_timeout=DB_CONFIG.get('connect_timeout', 10),
+        )
+    raise ValueError(f'Unsupported database type: {DB_TYPE}')
+
+
+try:
+    _raw_conn = _create_connection()
+except Exception as exc:
+    raise RuntimeError(f'无法连接到数据库（{DB_TYPE}）: {exc}')
+
+PARAMSTYLE = 'qmark' if DB_TYPE == 'sqlite' else 'pyformat'
+conn = ConnectionWrapper(_raw_conn, PARAMSTYLE)
+
+if DB_TYPE == 'sqlite':
+    conn.execute('PRAGMA journal_mode=WAL').close()
+    conn.execute('PRAGMA synchronous=NORMAL').close()
+    conn.execute('PRAGMA cache_size=10000').close()
+    conn.execute('PRAGMA temp_store=MEMORY').close()
+    conn.execute('PRAGMA mmap_size=268435456').close()
+
+TRANSACTION_BEGIN = 'BEGIN EXCLUSIVE TRANSACTION' if DB_TYPE == 'sqlite' else 'BEGIN'
+RANDOM_FUNCTION = 'RAND()' if DB_TYPE == 'mysql' else 'RANDOM()'
+ORDER_BY_RANDOM = f'ORDER BY {RANDOM_FUNCTION}'
+
+if DB_TYPE == 'sqlite':
+    from sqlite3 import IntegrityError as DBIntegrityError  # type: ignore[attr-defined]
+elif DB_TYPE == 'mysql':
+    from pymysql.err import IntegrityError as DBIntegrityError  # type: ignore[attr-defined]
+elif DB_TYPE == 'postgresql':
+    from psycopg2 import IntegrityError as DBIntegrityError  # type: ignore[attr-defined]
+else:
+    DBIntegrityError = Exception
+
 # 线程锁
 conn_lock = threading.Lock()
 # 进程锁
@@ -88,7 +234,7 @@ def pushNewFetch(fetcher_name, protocol, ip, port, username=None, password=None,
     
     try:
         c = conn.cursor()
-        c.execute('BEGIN EXCLUSIVE TRANSACTION;')
+        c.execute(TRANSACTION_BEGIN)
         # 更新proxies表 - 避免重复添加
         c.execute('SELECT * FROM proxies WHERE protocol=? AND ip=? AND port=?', (p.protocol, p.ip, p.port))
         row = c.fetchone()
@@ -144,7 +290,7 @@ def getToValidate(max_count=1):
     """
     _acquire_locks()
     c = conn.cursor()
-    c.execute('BEGIN EXCLUSIVE TRANSACTION;')
+    c.execute(TRANSACTION_BEGIN)
     c.execute('SELECT * FROM proxies WHERE to_validate_date<=? AND validated=? ORDER BY to_validate_date LIMIT ?', (
         datetime.datetime.now(),
         True,
@@ -189,11 +335,12 @@ def pushValidateResult(proxy, success, latency):
     
     _acquire_locks()
     if should_remove:
-        conn.execute('DELETE FROM proxies WHERE protocol=? AND ip=? AND port=?', (p.protocol, p.ip, p.port))
+        cur = conn.execute('DELETE FROM proxies WHERE protocol=? AND ip=? AND port=?', (p.protocol, p.ip, p.port))
+        cur.close()
     else:
         # 如果需要更新地理位置信息，则包含 country 和 address
         if need_update_location:
-            conn.execute("""
+            cur = conn.execute("""
                 UPDATE proxies
                 SET fetcher_name=?,validated=?,latency=?,validate_date=?,to_validate_date=?,validate_failed_cnt=?,country=?,address=?
                 WHERE protocol=? AND ip=? AND port=?
@@ -202,9 +349,10 @@ def pushValidateResult(proxy, success, latency):
                 p.country, p.address,
                 p.protocol, p.ip, p.port
             ))
+            cur.close()
         else:
             # 不更新地理位置信息
-            conn.execute("""
+            cur = conn.execute("""
                 UPDATE proxies
                 SET fetcher_name=?,validated=?,latency=?,validate_date=?,to_validate_date=?,validate_failed_cnt=?
                 WHERE protocol=? AND ip=? AND port=?
@@ -212,6 +360,7 @@ def pushValidateResult(proxy, success, latency):
                 p.fetcher_name, p.validated, p.latency, p.validate_date, p.to_validate_date, p.validate_failed_cnt,
                 p.protocol, p.ip, p.port
             ))
+            cur.close()
     conn.commit()
     _release_locks()
 
@@ -221,20 +370,23 @@ def getValidatedRandom(max_count):
     max_count<=0表示不做数量限制
     返回 : list[Proxy]
     
-    优化：使用更快的查询方式，避免 ORDER BY RANDOM() 在大量数据时性能问题
+    优化：使用更快的查询方式，避免在大量数据时使用数据库的随机排序导致性能问题
     """
     _acquire_locks()
     try:
         if max_count > 0:
-            # 对于有限制的查询，使用 RANDOM() 限制返回数量
-            # 先获取总数，如果数量不多就直接用 RANDOM()，否则用更快的方式
+            # 对于有限制的查询，使用数据库提供的随机函数限制返回数量
+            # 先获取总数，如果数量不多就直接随机排序，否则使用更快的方式
             r_count = conn.execute('SELECT count(*) FROM proxies WHERE validated=?', (True,))
             total = r_count.fetchone()[0]
             r_count.close()
             
             if total <= max_count * 2:
-                # 数据量不大，直接用 RANDOM()
-                r = conn.execute('SELECT * FROM proxies WHERE validated=? ORDER BY RANDOM() LIMIT ?', (True, max_count))
+                # 数据量不大，直接随机排序
+                r = conn.execute(
+                    f'SELECT * FROM proxies WHERE validated=? {ORDER_BY_RANDOM} LIMIT ?',
+                    (True, max_count)
+                )
             else:
                 # 数据量大，使用更快的方式：按 validate_date 排序（最近验证的）
                 r = conn.execute('SELECT * FROM proxies WHERE validated=? ORDER BY validate_date DESC LIMIT ?', (True, max_count))
@@ -256,9 +408,15 @@ def get_by_protocol(protocol, max_count):
     """
     _acquire_locks()
     if max_count > 0:
-        r = conn.execute('SELECT * FROM proxies WHERE protocol=? AND validated=? ORDER BY RANDOM() LIMIT ?', (protocol, True, max_count))
+        r = conn.execute(
+            f'SELECT * FROM proxies WHERE protocol=? AND validated=? {ORDER_BY_RANDOM} LIMIT ?',
+            (protocol, True, max_count)
+        )
     else:
-        r = conn.execute('SELECT * FROM proxies WHERE protocol=? AND validated=? ORDER BY RANDOM()', (protocol, True))
+        r = conn.execute(
+            f'SELECT * FROM proxies WHERE protocol=? AND validated=? {ORDER_BY_RANDOM}',
+            (protocol, True)
+        )
     proxies = [Proxy.decode(row) for row in r]
     r.close()
     _release_locks()
@@ -272,7 +430,7 @@ def pushFetcherResult(name, proxies_cnt):
     """
     _acquire_locks()
     c = conn.cursor()
-    c.execute('BEGIN EXCLUSIVE TRANSACTION;')
+    c.execute(TRANSACTION_BEGIN)
     c.execute('SELECT * FROM fetchers WHERE name=?', (name,))
     row = c.fetchone()
     if row is None:
@@ -297,7 +455,7 @@ def pushFetcherEnable(name, enable):
     """
     _acquire_locks()
     c = conn.cursor()
-    c.execute('BEGIN EXCLUSIVE TRANSACTION;')
+    c.execute(TRANSACTION_BEGIN)
     c.execute('SELECT * FROM fetchers WHERE name=?', (name,))
     row = c.fetchone()
     if row is None:
@@ -394,7 +552,7 @@ def pushClearFetchersStatus():
     """
     _acquire_locks()
     c = conn.cursor()
-    c.execute('BEGIN EXCLUSIVE TRANSACTION;')
+    c.execute(TRANSACTION_BEGIN)
     c.execute('UPDATE fetchers SET sum_proxies_cnt=?, last_proxies_cnt=?, last_fetch_date=?', (0, 0, None))
     c.close()
     conn.commit()

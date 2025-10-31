@@ -33,8 +33,34 @@ DATA_DIR = os.path.dirname(__file__)
 if not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR)
 
-# 数据库文件路径
+# 数据库文件路径（默认使用 SQLite）
 DATABASE_PATH = os.path.join(DATA_DIR, 'data.db')
+
+# 数据库配置
+_db_type_raw = os.environ.get('DB_TYPE', 'sqlite').strip().lower()
+if _db_type_raw in ('sqlite', 'sqlite3'):
+    DB_TYPE = 'sqlite'
+elif _db_type_raw in ('mysql',):
+    DB_TYPE = 'mysql'
+elif _db_type_raw in ('postgresql', 'postgres', 'psql'):
+    DB_TYPE = 'postgresql'
+else:
+    raise ValueError(f"不支持的数据库类型: {_db_type_raw}")
+
+if DB_TYPE == 'sqlite':
+    DB_CONFIG = {
+        'path': DATABASE_PATH,
+    }
+else:
+    default_port = 3306 if DB_TYPE == 'mysql' else 5432
+    DB_CONFIG = {
+        'host': os.environ.get('DB_HOST', 'localhost'),
+        'port': int(os.environ.get('DB_PORT', default_port)),
+        'user': os.environ.get('DB_USER', 'proxypool'),
+        'password': os.environ.get('DB_PASSWORD', ''),
+        'database': os.environ.get('DB_NAME', 'proxypool'),
+        'connect_timeout': int(os.environ.get('DB_CONNECT_TIMEOUT', 10)),
+    }
 
 # 其他数据文件路径
 USERS_FILE = os.path.join(DATA_DIR, 'users.json')

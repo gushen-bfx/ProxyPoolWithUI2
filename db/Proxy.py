@@ -16,7 +16,7 @@ class Proxy(object):
         port INTEGER NOT NULL,
         validated BOOLEAN NOT NULL,
         latency INTEGER,
-        validate_date TIMESTAMP,
+        validate_date TIMESTAMP NULL,
         to_validate_date TIMESTAMP NOT NULL,
         validate_failed_cnt INTEGER NOT NULL,
         created_date TIMESTAMP NOT NULL,
@@ -95,8 +95,8 @@ class Proxy(object):
     @staticmethod
     def decode(row):
         """
-        将sqlite返回的一行解析为Proxy
-        row : sqlite返回的一行
+        将数据库返回的一行解析为Proxy
+        row : 数据库返回的一行
         """
         # 兼容旧数据（9, 10个字段）和新数据（14个字段）
         assert len(row) in [9, 10, 14]

@@ -42,6 +42,31 @@ python main.py
 
 > **🔐 安全提示**: 首次运行前必须配置 JWT 密钥！运行 `python setup_security.py` 进行安全配置。
 
+### 数据库配置
+
+默认情况下，系统会在 `data/data.db` 中使用 SQLite 存储所有数据。
+如果你希望接入 MySQL 或 PostgreSQL，只需在 `.env` 文件或系统环境变量中声明连接信息：
+
+```bash
+# MySQL 示例
+DB_TYPE=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=proxypool
+DB_PASSWORD=your_password
+DB_NAME=proxypool
+
+# PostgreSQL 示例
+DB_TYPE=postgresql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_USER=proxypool
+DB_PASSWORD=your_password
+DB_NAME=proxypool
+```
+
+修改完成后重新启动服务即可，系统会自动完成表结构初始化。
+
 ### 方式二：Docker 运行
 
 #### 快速开始
@@ -106,6 +131,69 @@ docker run -d \
   ghcr.io/huppugo1/proxypoolwithui:latest
 ```
 > ✅ **优势**: Docker自动管理，适合生产环境
+
+#### 在 Docker 中配置数据库
+
+容器同样支持通过环境变量切换到 MySQL 或 PostgreSQL，只需在启动时传入连接信息即可。
+
+**方式一：直接在命令行传入变量**
+
+```bash
+docker run -d \
+  --name proxy-pool \
+  -p 5000:5000 \
+  -v $(pwd)/data:/proxy/data \
+  -e DB_TYPE=mysql \
+  -e DB_HOST=your-mysql-host \
+  -e DB_PORT=3306 \
+  -e DB_USER=proxypool \
+  -e DB_PASSWORD=your_password \
+  -e DB_NAME=proxypool \
+  ghcr.io/huppugo1/proxypoolwithui:latest
+```
+
+**方式二：使用 `.env` 文件（推荐）**
+
+```bash
+# 1. 创建 .env 文件
+cat <<'EOF' > .env
+DB_TYPE=postgresql
+DB_HOST=your-postgres-host
+DB_PORT=5432
+DB_USER=proxypool
+DB_PASSWORD=your_password
+DB_NAME=proxypool
+EOF
+
+# 2. 启动容器并加载 .env
+docker run -d \
+  --name proxy-pool \
+  -p 5000:5000 \
+  -v $(pwd)/data:/proxy/data \
+  --env-file .env \
+  ghcr.io/huppugo1/proxypoolwithui:latest
+```
+
+> ℹ️ **提示**: 当使用外部数据库时，请确保数据库实例允许容器网络访问，并提前创建好对应的数据库和账号。
+
+**方式三：使用 Docker Compose 管理部署**
+
+```yaml
+version: "3.8"
+services:
+  proxypool:
+    image: ghcr.io/huppugo1/proxypoolwithui:latest
+    container_name: proxy-pool
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/proxy/data
+    env_file:
+      - .env
+```
+
+保存上述内容为 `docker-compose.yml`，与 `.env` 放在同一目录下，运行 `docker compose up -d` 即可启动服务。
 
 #### 完整部署示例
 
