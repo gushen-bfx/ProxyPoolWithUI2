@@ -11,7 +11,7 @@ import time
 import urllib.parse
 import base64
 from flask import Flask
-from flask import jsonify, request, redirect, send_from_directory, Response
+from flask import jsonify, request, redirect, send_from_directory, Response, abort
 
 log = logging.getLogger('werkzeug')
 log.disabled = True
@@ -1963,6 +1963,32 @@ def page_index():
 @app.route('/web/fetchers/', methods=['GET'])
 def page_fetchers():
     return send_from_directory(STATIC_FOLDER, 'fetchers/index.html')
+
+
+@app.route('/web/<path:subpath>', methods=['GET'])
+def page_static(subpath):
+    """Serve static frontend routes for deep links under /web."""
+    # Normalize the requested path to avoid path traversal attempts
+    normalized = os.path.normpath(subpath)
+    if normalized.startswith('..'):
+        abort(404)
+
+    static_root = os.path.abspath(STATIC_FOLDER)
+    requested = os.path.abspath(os.path.join(static_root, normalized))
+    if os.path.commonpath([requested, static_root]) != static_root:
+        abort(404)
+
+    if os.path.isdir(requested):
+        index_file = os.path.join(requested, 'index.html')
+        if os.path.isfile(index_file):
+            rel_dir = os.path.relpath(requested, static_root)
+            return send_from_directory(os.path.join(static_root, rel_dir), 'index.html')
+    elif os.path.isfile(requested):
+        rel_dir = os.path.dirname(normalized)
+        file_name = os.path.basename(normalized)
+        return send_from_directory(os.path.join(static_root, rel_dir), file_name)
+
+    abort(404)
 
 # 获取代理状态
 @app.route('/proxies_status', methods=['GET'])
