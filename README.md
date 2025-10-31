@@ -321,7 +321,7 @@ scp -r ./data/ user@new-server:/path/to/new/location/
 
 ### Token 说明
 
-- Token 有效期：24 小时（可在 `config.py` 中配置）
+- Token 有效期：24 小时（可在 `config/__init__.py` 中配置）
 - Token 过期后需要重新登录
 - 前端会自动处理 Token 过期跳转
 
@@ -627,8 +627,8 @@ ProxyPoolWithUI/
 ├── proc/             # 爬取和验证进程
 ├── frontend/         # Web 前端（Nuxt 3 + Vue 3）
 ├── utils/            # 工具类（IP 定位、单实例管理）
-├── data/             # 数据目录（数据库、配置文件等）
-│   ├── config.py     # 配置文件
+├── config/           # 应用配置（环境变量、数据目录等）
+├── data/             # 数据目录（数据库、运行时文件等）
 │   ├── data.db       # SQLite 数据库
 │   ├── users.json    # 用户数据
 │   ├── api_status.json # API接口状态配置
@@ -638,17 +638,19 @@ ProxyPoolWithUI/
 
 ## ⚙️ 配置说明
 
-大部分配置在 `data/config.py` 中，默认配置已经可以适应大部分情况。
+大部分配置在 `config/__init__.py` 中，默认配置已经可以适应大部分情况。
 
 ### 数据目录结构
 
-所有数据文件和配置文件统一存放在 `data/` 目录下：
+所有运行时数据文件统一存放在 `data/` 目录下，配置代码位于 `config/` 目录：
 
-- **`data/config.py`** - 主配置文件，包含所有系统配置
+- **`config/__init__.py`** - 主配置模块，处理所有系统配置
 - **`data/data.db`** - SQLite 数据库文件，存储代理数据
 - **`data/users.json`** - 用户账户数据（用户名、密码哈希等）
 - **`data/api_status.json`** - API接口启用/禁用状态配置
 - **`data/sub.json`** - 生成的订阅链接存储
+
+> ℹ️ 可以通过环境变量 `DATA_DIR` 自定义数据目录位置（例如在 Docker 中挂载到其他路径）。
 
 ### 数据备份
 
@@ -671,7 +673,7 @@ tar -xzf proxypool_backup_20241019.tar.gz
 
 ### 认证配置
 
-在 `config.py` 中可以配置认证相关参数：
+在 `config/__init__.py` 中可以配置认证相关参数：
 
 ```python
 # JWT密钥 - 建议在生产环境使用环境变量

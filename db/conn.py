@@ -4,7 +4,7 @@
 封装的数据库接口
 """
 
-from data.config import DATABASE_PATH, DB_TYPE, DB_CONFIG
+from config import DATABASE_PATH, DB_TYPE, DB_CONFIG
 from .Proxy import Proxy
 from .Fetcher import Fetcher
 import datetime

@@ -34,7 +34,7 @@ def main():
     
     # 检查JWT密钥配置
     try:
-        from data.config import JWT_SECRET_KEY, print_security_setup_guide
+        from config import JWT_SECRET_KEY, print_security_setup_guide
         print("✅ JWT密钥配置检查通过")
         print(f"✅ 密钥长度: {len(JWT_SECRET_KEY)} 字符")
     except ValueError as e:

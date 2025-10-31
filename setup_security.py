@@ -87,7 +87,7 @@ def test_configuration():
     try:
         # 尝试导入配置
         sys.path.insert(0, os.path.dirname(__file__))
-        from data.config import JWT_SECRET_KEY
+        from config import JWT_SECRET_KEY
         
         print("✅ 配置导入成功")
         print(f"✅ JWT密钥长度: {len(JWT_SECRET_KEY)}")

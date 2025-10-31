@@ -18,13 +18,13 @@ log.disabled = True
 
 try:
     from db import conn
-    from data.config import auth_manager, API_STATUS_FILE, SUBSCRIPTIONS_FILE
+    from config import auth_manager, API_STATUS_FILE, SUBSCRIPTIONS_FILE
     from auth.auth_manager import token_required
 except:
     import sys
     sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
     from db import conn
-    from data.config import auth_manager, API_STATUS_FILE, SUBSCRIPTIONS_FILE
+    from config import auth_manager, API_STATUS_FILE, SUBSCRIPTIONS_FILE
     from auth.auth_manager import token_required
 
 STATIC_FOLDER = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', 'frontend', 'deployment', 'public')
@@ -1780,7 +1780,7 @@ def refresh_subscription_link(link_id):
 ############# API接口管理 ################
 
 # API接口状态配置文件路径
-# API状态文件路径已在config.py中定义
+# API状态文件路径已在 config/__init__.py 中定义
 
 # 默认API接口状态配置
 DEFAULT_API_ENABLED_STATUS = {
